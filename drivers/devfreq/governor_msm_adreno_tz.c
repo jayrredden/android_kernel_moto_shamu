@@ -80,6 +80,9 @@ static int __secure_tz_entry2(u32 cmd, u32 val1, u32 val2)
 	return ret;
 }
 
+/* Boolean to detect if pm has entered suspend mode */
+static bool suspended = false;
+
 static int __secure_tz_entry3(u32 cmd, u32 val1, u32 val2, u32 val3)
 {
 	int ret;
@@ -359,6 +362,8 @@ static int tz_resume(struct devfreq *devfreq)
 	struct devfreq_dev_profile *profile = devfreq->profile;
 	unsigned long freq;
 
+	suspended = false;
+
 	freq = profile->initial_freq;
 
 	return profile->target(devfreq->dev.parent, &freq, 0);
@@ -367,15 +372,21 @@ static int tz_resume(struct devfreq *devfreq)
 static int tz_suspend(struct devfreq *devfreq)
 {
 	struct devfreq_msm_adreno_tz_data *priv = devfreq->data;
+	struct devfreq_dev_profile *profile = devfreq->profile;
+	unsigned long freq;
 
 	__secure_tz_entry2(TZ_RESET_ID, 0, 0);
+	suspended = true;
 
 	priv->bin.total_time = 0;
 	priv->bin.busy_time = 0;
 	priv->bus.total_time = 0;
 	priv->bus.gpu_time = 0;
 	priv->bus.ram_time = 0;
-	return 0;
+
+	freq = profile->freq_table[profile->max_state - 1];
+
+	return profile->target(devfreq->dev.parent, &freq, 0);
 }
 
 static int tz_handler(struct devfreq *devfreq, unsigned int event, void *data)
