@@ -19,6 +19,7 @@
 #include <linux/io.h>
 #include <linux/ftrace.h>
 #include <linux/msm_adreno_devfreq.h>
+#include <linux/display_state.h>
 #include <asm/cacheflush.h>
 #include <linux/state_notifier.h>
 #include <soc/qcom/scm.h>
@@ -82,7 +83,8 @@ static int __secure_tz_entry2(u32 cmd, u32 val1, u32 val2)
 	return ret;
 }
 
-/* Boolean to detect if pm has entered suspend mode */
+/* Display and suspend state booleans */ 
+static bool display_on;
 static bool suspended = false;
 
 static int __secure_tz_entry3(u32 cmd, u32 val1, u32 val2, u32 val3)
@@ -153,7 +155,7 @@ static int tz_get_target_freq(struct devfreq *devfreq, unsigned long *freq,
 	 * Force to use & record as min freq when system has
 	 * entered pm-suspend or screen-off state.
 	 */
-	if (state_suspended) {
+	if (suspended || !display_on) {
 		*freq = devfreq->profile->freq_table[devfreq->profile->max_state - 1];
 		return 0;
 	}
@@ -378,6 +380,7 @@ static int tz_suspend(struct devfreq *devfreq)
 	unsigned long freq;
 
 	__secure_tz_entry2(TZ_RESET_ID, 0, 0);
+	display_on = is_display_on();
 	suspended = true;
 
 	priv->bin.total_time = 0;
@@ -411,6 +414,8 @@ static int tz_handler(struct devfreq *devfreq, unsigned int event, void *data)
 
 	case DEVFREQ_GOV_RESUME:
 		result = tz_resume(devfreq);
+		display_on = is_display_on();
+		suspended = false;
 		break;
 
 	case DEVFREQ_GOV_INTERVAL:
